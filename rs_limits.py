@@ -14,7 +14,7 @@
 #    under the License.
 
 import argparse
-from turnstile import tools
+from turnstile import config
 
 
 def rs_preprocess(midware, environ):
@@ -68,12 +68,12 @@ def rs_preprocess(midware, environ):
             return
 
 
-def _group_class(config, group, klass=None, delete=False):
+def _group_class(conf_file, group, klass=None, delete=False):
     """
     Set up or query limit classes associated with groups.
 
-    :param config: Name of the configuration file, for connecting to
-                   the Redis database.
+    :param conf_file: Name of the configuration file, for connecting
+                      to the Redis database.
     :param group: The name of the group.
     :param klass: If provided, the name of the class to map the group
                   to.
@@ -84,7 +84,8 @@ def _group_class(config, group, klass=None, delete=False):
     """
 
     # Connect to the database...
-    db, _limits_key, _control_channel = tools.parse_config(config)
+    conf = config.Config(conf_file=conf_file)
+    db = conf.get_database()
 
     # Get the key for the limit class...
     key = 'rs-group:%s' % group
