@@ -8,7 +8,7 @@ def read(fname):
 
 setup(
     name='rs_limits',
-    version='0.5.1',
+    version='0.6.1',
     author='Kevin L. Mitchell',
     author_email='kevin.mitchell@rackspace.com',
     description="Rackspace-specific rate-limit preprocessor for turnstile",
@@ -32,8 +32,8 @@ setup(
         },
     install_requires=[
         'argparse',
-        'nova_limits',
-        'turnstile',
+        'nova_limits>=0.6.1',
+        'turnstile>=0.6.1',
         ],
     tests_require=[
         'mox',
