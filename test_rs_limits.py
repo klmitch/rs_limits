@@ -1,10 +1,10 @@
 import StringIO
 import sys
-import unittest
 
 import argparse
 import stubout
 from turnstile import config
+import unittest2
 
 import rs_limits
 
@@ -39,7 +39,7 @@ class FakeContext(object):
             self.quota_class = None
 
 
-class TestPreprocess(unittest.TestCase):
+class TestPreprocess(unittest2.TestCase):
     def test_nogroups(self):
         db = FakeDatabase()
         midware = FakeMiddleware(db)
@@ -144,7 +144,7 @@ class TestPreprocess(unittest.TestCase):
         self.assertEqual(context.quota_class, 'lim_class')
 
 
-class TestGroupClass(unittest.TestCase):
+class TestGroupClass(unittest2.TestCase):
     def setUp(self):
         self.fake_db = FakeDatabase()
         self.stubs = stubout.StubOutForTesting()
@@ -266,7 +266,7 @@ class FakeArgumentParser(object):
         return self._namespace
 
 
-class TestToolGroupClass(unittest.TestCase):
+class TestToolGroupClass(unittest2.TestCase):
     def setUp(self):
         self.stubs = stubout.StubOutForTesting()
 

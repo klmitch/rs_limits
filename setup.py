@@ -37,5 +37,6 @@ setup(
         ],
     tests_require=[
         'mox',
+        'unittest2>=0.5.1',
         ],
     )
