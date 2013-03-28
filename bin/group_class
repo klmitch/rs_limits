@@ -16,4 +16,4 @@ import rs_limits
 
 
 if __name__ == '__main__':
-    rs_limits.group_class()
+    rs_limits.group_class.console()

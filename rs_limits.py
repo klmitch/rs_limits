@@ -13,8 +13,8 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import argparse
 from turnstile import config
+from turnstile import tools
 
 
 def rs_preprocess(midware, environ):
@@ -68,7 +68,79 @@ def rs_preprocess(midware, environ):
             return
 
 
-def _group_class(conf_file, group, klass=None, delete=False):
+def _check_arguments(args):
+    """
+    Sanity-check the arguments to ensure that the --class and --delete
+    options are not both given.  This is a preprocessor for the
+    group_class() function, when being called in console script mode.
+
+    :param args: A Namespace object containing a 'klass' attribute and
+                 a 'delete' attribute.
+    """
+
+    if args.klass and args.delete:
+        raise Exception("The --class and --delete options are "
+                        "mutually exclusive.")
+
+
+def _report_group_class(args, result):
+    """
+    Report the rate-limit class for the group.  This is a
+    postprocessor for the group_class() function, when being called in
+    console script mode.
+
+    :param args: A Namespace object containing a 'group' attribute, a
+                 desired rate-limit class in the 'klass' attribute
+                 (which should be None if no change was requested),
+                 and a 'delete' attribute (which should be True if the
+                 association was to be deleted).
+    :param result: The result of the group_class() function call.
+                   This will be the previously configured rate-limit
+                   class for the group.
+
+    :returns: None to indicate success.
+    """
+
+    print "Group %s:" % args.group
+    if args.klass or args.delete:
+        if result:
+            print "  Previous rate-limit class: %s" % result
+        if args.delete:
+            print "  Deleted from database"
+        else:
+            print "  New rate-limit class: %s" % args.klass
+    elif result:
+        print "  Configured rate-limit class: %s" % result
+    else:
+        print "  Not currently configured in database."
+
+    return None
+
+
+@tools.add_argument('config',
+                    help="Name of the configuration file, for connecting "
+                    "to the Redis database.")
+@tools.add_argument('group',
+                    help="Name of the group.")
+@tools.add_argument('--debug', '-d',
+                    dest='debug',
+                    action='store_true',
+                    default=False,
+                    help="Run the tool in debug mode.")
+@tools.add_argument('--delete', '-D',
+                    dest='delete',
+                    action='store_true',
+                    default=False,
+                    help="Delete the group from the database.")
+@tools.add_argument('--class', '-c',
+                    dest='klass',
+                    action='store',
+                    default=None,
+                    help="If specified, sets the class associated with "
+                    "the given group.")
+@tools.add_preprocessor(_check_arguments)
+@tools.add_postprocessor(_report_group_class)
+def group_class(conf_file, group, klass=None, delete=False):
     """
     Set up or query limit classes associated with groups.
 
@@ -94,7 +166,7 @@ def _group_class(conf_file, group, klass=None, delete=False):
     old_klass = db.get(key)
 
     # Do we need to delete it?  Change it?
-    if delete:
+    if delete and old_klass is not None:
         db.delete(key)
     elif klass and klass != old_klass:
         db.set(key, klass)
@@ -102,60 +174,5 @@ def _group_class(conf_file, group, klass=None, delete=False):
     return old_klass
 
 
-def group_class():
-    """
-    Console script entry point for setting limit classes associated
-    with particular groups.
-    """
-
-    parser = argparse.ArgumentParser(
-        description="Set up or query limit classes associated with groups.",
-        )
-
-    parser.add_argument('config',
-                        help="Name of the configuration file, for connecting "
-                        "to the Redis database.")
-    parser.add_argument('group',
-                        help="Name of the group.")
-    parser.add_argument('--debug', '-d',
-                        dest='debug',
-                        action='store_true',
-                        default=False,
-                        help="Run the tool in debug mode.")
-    parser.add_argument('--delete', '-D',
-                        dest='delete',
-                        action='store_true',
-                        default=False,
-                        help="Delete the group from the database.")
-    parser.add_argument('--class', '-c',
-                        dest='klass',
-                        action='store',
-                        default=None,
-                        help="If specified, sets the class associated with "
-                        "the given group.")
-
-    args = parser.parse_args()
-
-    # Don't allow --class and --delete to both be given
-    if args.klass and args.delete:
-        return "The --class and --delete options are mutually exclusive."
-
-    try:
-        klass = _group_class(args.config, args.group, args.klass, args.delete)
-
-        print "Group %s:" % args.group
-        if args.klass or args.delete:
-            if klass:
-                print "  Previous rate-limit class: %s" % klass
-            if args.delete:
-                print "  Deleted from database"
-            else:
-                print "  New rate-limit class: %s" % args.klass
-        elif klass:
-            print "  Configured rate-limit class: %s" % klass
-        else:
-            print "  Not currently configured in database."
-    except Exception as exc:
-        if args.debug:
-            raise
-        return str(exc)
+# For backwards compatibility
+_group_class = group_class
