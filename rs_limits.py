@@ -17,6 +17,59 @@ from turnstile import config
 from turnstile import tools
 
 
+class GroupPriorities(dict):
+    """
+    Map groups to priorities.
+    """
+
+    def __init__(self, conf_value):
+        """
+        Initialize the priorities from the configuration value, which
+        is a string looking like:
+
+            =0.1,Admin=0.5,Delinquent=1.0
+
+        An empty group name will become the default value for all
+        groups; if it's not specificed, the value used will be 0.1.
+        The priority value may range between 0 and 1, and will be
+        clamped to those values; it will also be capped at 3 decimal
+        places, to comply with the HTTP spec for quality values.
+
+        Note: Group names are coerced to lower-case for case
+        insensitivity.
+
+        :param conf_value: The configuration value, as described
+                           above.
+        """
+
+        # Initialize the dict object
+        super(GroupPriorities, self).__init__()
+
+        # Now, start populating ourself
+        for group_spec in conf_value.split(','):
+            group_spec = group_spec.strip()
+            group, _sep, prio = group_spec.partition('=')
+
+            group = group.strip()
+            try:
+                prio = float(prio)
+            except ValueError:
+                # We'll use the default value for this group
+                continue
+
+            self[group.lower()] = prio
+
+    def __missing__(self, key):
+        """
+        Retrieve a default value for the priority of an undeclared
+        group.
+
+        :param key: The name of the undeclared group.
+        """
+
+        return self.get('', 0.1)
+
+
 def rs_preprocess(midware, environ):
     """
     Pre-process requests to nova.  Derives the rate-limit class from
@@ -37,6 +90,7 @@ def rs_preprocess(midware, environ):
 
     # Split the groups string into a list of groups, respecting quality
     groups = []
+    overall_quality = 1.0
     for group in group_str.split(','):
         # Strip off any whitespace, just in case
         group = group.strip()
@@ -52,6 +106,19 @@ def rs_preprocess(midware, environ):
                 pass
 
         groups.append((name, quality))
+        overall_quality *= quality
+
+    # If the overall quality is 1.0, that means we have the Repose
+    # group priority bug; work around it by rebuilding the groups list
+    if overall_quality == 1.0:
+        # First, let's build the group priorities dictionary
+        conf = environ.get('turnstile.conf', {'rs_limits': {}})
+        prios = GroupPriorities(conf['rs_limits'].get('groups', ''))
+
+        # Now walk through the groups list and rebuild it
+        for idx in range(len(groups)):
+            name, quality = groups[idx]
+            groups[idx] = (name, prios[name.lower()] * quality)
 
     # Look up the rate-limit class from the database
     for group, _quality in sorted(groups, key=lambda x: x[1], reverse=True):

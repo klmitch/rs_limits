@@ -13,6 +13,7 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+import decimal
 import StringIO
 import sys
 
@@ -22,6 +23,29 @@ from turnstile import tools
 import unittest2
 
 import rs_limits
+
+
+class TestGroupPriorities(unittest2.TestCase):
+    def test_init(self):
+        expected = {
+            "": 0.1,
+            "admin": 0.5555,
+            "delinquent": 1,
+        }
+        example = "=0.1, AdMin=0.5555, dElINQUenT=1.00000000, iNvalId=0.1a"
+
+        gp = rs_limits.GroupPriorities(example)
+
+        self.assertEqual(gp, expected)
+
+    def test_missing(self):
+        example = "=0.1, AdMin=0.5555, dElINQUenT=1.00000000"
+
+        gp = rs_limits.GroupPriorities(example)
+
+        self.assertEqual(gp['nobody'], 0.1)
+        self.assertEqual(gp['AdMin'], 0.1)
+        self.assertEqual(gp['admin'], 0.5555)
 
 
 class TestPreprocess(unittest2.TestCase):
@@ -94,6 +118,26 @@ class TestPreprocess(unittest2.TestCase):
             mock.call.get('rs-group:grp1'),
             mock.call.get('rs-group:grp2'),
             mock.call.get('rs-group:grp3'),
+        ])
+
+    def test_group_repose_workaround(self):
+        classes = {'rs-group:grp5': 'lim_class'}
+        db = mock.Mock(**{'get.side_effect': lambda x: classes.get(x)})
+        midware = mock.Mock(db=db)
+        environ = {
+            'HTTP_X_PP_GROUPS': 'grp1,grp2,grp3,grp4,grp5',
+            'turnstile.conf': {'rs_limits': {'groups': "grp5=1.0"}},
+        }
+
+        rs_limits.rs_preprocess(midware, environ)
+
+        self.assertEqual(environ, {
+            'HTTP_X_PP_GROUPS': 'grp1,grp2,grp3,grp4,grp5',
+            'turnstile.conf': {'rs_limits': {'groups': "grp5=1.0"}},
+            'turnstile.nova.limitclass': 'lim_class',
+        })
+        db.assert_has_calls([
+            mock.call.get('rs-group:grp5'),
         ])
 
     def test_group_context_no_quota_class(self):
